@@ -14,7 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          balance: number
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          pix_key: string | null
+          total_played: number
+          total_won: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          pix_key?: string | null
+          total_played?: number
+          total_won?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          pix_key?: string | null
+          total_played?: number
+          total_won?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scratch_cards: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          id: string
+          prize_amount: number
+          purchase_amount: number
+          revealed_at: string | null
+          status: Database["public"]["Enums"]["scratch_status"]
+          symbols: Json | null
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          prize_amount: number
+          purchase_amount: number
+          revealed_at?: string | null
+          status?: Database["public"]["Enums"]["scratch_status"]
+          symbols?: Json | null
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          prize_amount?: number
+          purchase_amount?: number
+          revealed_at?: string | null
+          status?: Database["public"]["Enums"]["scratch_status"]
+          symbols?: Json | null
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scratch_cards_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scratch_cards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          mercadopago_payment_id: string | null
+          mercadopago_payout_id: string | null
+          metadata: Json | null
+          pix_key: string | null
+          qr_code: string | null
+          qr_code_base64: string | null
+          status: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          mercadopago_payment_id?: string | null
+          mercadopago_payout_id?: string | null
+          metadata?: Json | null
+          pix_key?: string | null
+          qr_code?: string | null
+          qr_code_base64?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          mercadopago_payment_id?: string | null
+          mercadopago_payout_id?: string | null
+          metadata?: Json | null
+          pix_key?: string | null
+          qr_code?: string | null
+          qr_code_base64?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type?: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +171,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      scratch_status: "purchased" | "revealed" | "claimed"
+      transaction_status: "pending" | "completed" | "failed" | "cancelled"
+      transaction_type:
+        | "deposit"
+        | "scratch_purchase"
+        | "prize_win"
+        | "prize_payout"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +304,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      scratch_status: ["purchased", "revealed", "claimed"],
+      transaction_status: ["pending", "completed", "failed", "cancelled"],
+      transaction_type: [
+        "deposit",
+        "scratch_purchase",
+        "prize_win",
+        "prize_payout",
+      ],
+    },
   },
 } as const
