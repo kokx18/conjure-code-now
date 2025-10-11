@@ -17,8 +17,76 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // CRITICAL SECURITY FIX: Verify Mercado Pago signature
+    const signature = req.headers.get('x-signature');
+    const requestId = req.headers.get('x-request-id');
+    
+    if (!signature || !requestId) {
+      console.error('Missing signature or request ID');
+      return new Response('Unauthorized', { status: 401 });
+    }
+
     const webhookData = await req.json();
-    console.log('Webhook received:', webhookData);
+    console.log('Webhook received:', { type: webhookData.type, id: webhookData.data?.id });
+
+    // Verify webhook signature
+    const secret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET');
+    if (!secret) {
+      console.error('MERCADOPAGO_WEBHOOK_SECRET not configured');
+      return new Response('Server configuration error', { status: 500 });
+    }
+
+    // Extract signature parts
+    const signatureParts = signature.split(',');
+    const tsHeader = signatureParts.find(part => part.startsWith('ts='));
+    const v1Header = signatureParts.find(part => part.startsWith('v1='));
+    
+    if (!tsHeader || !v1Header) {
+      console.error('Invalid signature format');
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const ts = tsHeader.split('=')[1];
+    const hash = v1Header.split('=')[1];
+
+    // Create verification string
+    const dataId = webhookData.data?.id || '';
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+
+    // Calculate expected signature
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(manifest);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+    const expectedHash = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    if (hash !== expectedHash) {
+      console.error('Signature verification failed');
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    // Check for replay attacks (notification already processed)
+    const { data: existingNotification } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('metadata->>notification_id', requestId)
+      .maybeSingle();
+
+    if (existingNotification) {
+      console.log('Duplicate notification, ignoring:', requestId);
+      return new Response('OK', { status: 200 });
+    }
 
     // Handle payment notifications
     if (webhookData.type === 'payment') {
@@ -56,29 +124,35 @@ serve(async (req) => {
 
       // Update transaction status based on payment status
       if (payment.status === 'approved') {
-        // Update transaction
+        // Update transaction with notification tracking
         await supabase
           .from('transactions')
-          .update({ status: 'completed' })
+          .update({ 
+            status: 'completed',
+            metadata: {
+              ...transaction.metadata,
+              notification_id: requestId,
+              processed_at: new Date().toISOString()
+            }
+          })
           .eq('id', transaction.id);
 
-        // Add balance to user
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', transaction.user_id)
-          .single();
-
-        if (profile) {
-          await supabase
-            .from('profiles')
-            .update({ balance: profile.balance + transaction.amount })
-            .eq('id', transaction.user_id);
-        }
+        // Add balance to user using atomic operation
+        await supabase.rpc('add_balance', {
+          p_user_id: transaction.user_id,
+          p_amount: transaction.amount
+        });
       } else if (payment.status === 'cancelled' || payment.status === 'rejected') {
         await supabase
           .from('transactions')
-          .update({ status: 'failed' })
+          .update({ 
+            status: 'failed',
+            metadata: {
+              ...transaction.metadata,
+              notification_id: requestId,
+              processed_at: new Date().toISOString()
+            }
+          })
           .eq('id', transaction.id);
       }
     }
