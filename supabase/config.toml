@@ -1,1 +1,10 @@
 project_id = "muvqwsovfhymhkdmzoqx"
+
+[functions.create-pix-payment]
+verify_jwt = true
+
+[functions.create-pix-withdrawal]
+verify_jwt = true
+
+[functions.mercadopago-webhook]
+verify_jwt = false
