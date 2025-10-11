@@ -6,6 +6,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Constants for validation
+const MIN_WITHDRAWAL_AMOUNT = 1.00;
+const MAX_WITHDRAWAL_AMOUNT = 10000.00;
+
+// Rate limiting cache (in-memory, reset on function restart)
+const rateLimitCache = new Map<string, number[]>();
+const MAX_REQUESTS_PER_MINUTE = 5;
+
+// PIX key validation patterns
+const PIX_PATTERNS = {
+  CPF: /^\d{11}$/,
+  CNPJ: /^\d{14}$/,
+  EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  PHONE: /^\+?55\d{10,11}$/,
+  RANDOM: /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+};
+
+function isValidPixKey(pixKey: string): boolean {
+  if (!pixKey || typeof pixKey !== 'string') return false;
+  
+  const cleanKey = pixKey.trim();
+  if (cleanKey.length === 0 || cleanKey.length > 100) return false;
+  
+  return Object.values(PIX_PATTERNS).some(pattern => pattern.test(cleanKey));
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -22,21 +48,74 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error('Unauthorized');
+      return new Response(
+        JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Autenticação necessária' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    // Rate limiting check
+    const now = Date.now();
+    const userRequests = rateLimitCache.get(user.id) || [];
+    const recentRequests = userRequests.filter(time => now - time < 60000);
+    
+    if (recentRequests.length >= MAX_REQUESTS_PER_MINUTE) {
+      console.warn(`[Rate limit] User ${user.id} exceeded ${MAX_REQUESTS_PER_MINUTE} requests/minute`);
+      return new Response(
+        JSON.stringify({ error: 'RATE_LIMIT_EXCEEDED', message: 'Muitas tentativas. Aguarde um momento.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    recentRequests.push(now);
+    rateLimitCache.set(user.id, recentRequests);
 
     const { amount, pix_key, idempotency_key } = await req.json();
 
-    if (!amount || amount <= 0) {
-      throw new Error('Invalid amount');
+    // Comprehensive amount validation
+    if (!amount || typeof amount !== 'number') {
+      return new Response(
+        JSON.stringify({ error: 'INVALID_AMOUNT', message: 'Valor inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    if (amount > 10000) {
-      throw new Error('Maximum withdrawal amount is R$ 10,000');
+    if (amount < MIN_WITHDRAWAL_AMOUNT) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'AMOUNT_TOO_LOW', 
+          message: `Valor mínimo de saque é R$ ${MIN_WITHDRAWAL_AMOUNT.toFixed(2)}` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    if (!pix_key) {
-      throw new Error('PIX key is required');
+    if (amount > MAX_WITHDRAWAL_AMOUNT) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'AMOUNT_TOO_HIGH', 
+          message: `Valor máximo de saque é R$ ${MAX_WITHDRAWAL_AMOUNT.toFixed(2)}` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // PIX key validation
+    if (!pix_key || typeof pix_key !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'PIX_KEY_REQUIRED', message: 'Chave PIX é obrigatória' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!isValidPixKey(pix_key)) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'INVALID_PIX_KEY', 
+          message: 'Chave PIX inválida. Use CPF, CNPJ, email, telefone ou chave aleatória.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Check for duplicate withdrawal using idempotency key
@@ -62,7 +141,11 @@ serve(async (req) => {
 
     const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
     if (!accessToken) {
-      throw new Error('Mercado Pago not configured');
+      console.error('[INTERNAL] Mercado Pago access token not configured');
+      return new Response(
+        JSON.stringify({ error: 'SERVICE_UNAVAILABLE', message: 'Serviço temporariamente indisponível' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // CRITICAL FIX: Atomically deduct balance BEFORE calling external API
@@ -76,8 +159,20 @@ serve(async (req) => {
     );
 
     if (balanceError || !updatedProfile) {
-      console.error('Balance deduction error:', balanceError);
-      throw new Error(balanceError?.message || 'Insufficient balance');
+      console.error('[INTERNAL] Balance deduction error:', {
+        user_id: user.id,
+        amount: amount,
+        error: balanceError
+      });
+      
+      const isInsufficientBalance = balanceError?.message?.includes('Insufficient balance');
+      return new Response(
+        JSON.stringify({ 
+          error: isInsufficientBalance ? 'INSUFFICIENT_BALANCE' : 'BALANCE_ERROR',
+          message: isInsufficientBalance ? 'Saldo insuficiente' : 'Erro ao processar saque. Tente novamente.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     let payoutData;
@@ -102,7 +197,12 @@ serve(async (req) => {
 
       if (!payoutResponse.ok) {
         const errorData = await payoutResponse.json();
-        console.error('Mercado Pago error:', errorData);
+        console.error('[INTERNAL] Mercado Pago payout error:', {
+          status: payoutResponse.status,
+          user_id: user.id,
+          amount: amount,
+          error: errorData
+        });
         
         // ROLLBACK: Restore balance if Mercado Pago fails
         await supabase.rpc('restore_balance', {
@@ -110,7 +210,10 @@ serve(async (req) => {
           p_amount: amount
         });
         
-        throw new Error('Failed to create withdrawal');
+        return new Response(
+          JSON.stringify({ error: 'WITHDRAWAL_FAILED', message: 'Não foi possível processar o saque. Tente novamente.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       payoutData = await payoutResponse.json();
@@ -143,8 +246,15 @@ serve(async (req) => {
       .single();
 
     if (txError) {
-      console.error('Database error:', txError);
-      throw new Error('Failed to save transaction');
+      console.error('[INTERNAL] Database error while saving withdrawal transaction:', {
+        user_id: user.id,
+        amount: amount,
+        error: txError
+      });
+      return new Response(
+        JSON.stringify({ error: 'DATABASE_ERROR', message: 'Erro ao processar transação. Entre em contato com o suporte.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
@@ -156,11 +266,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[INTERNAL] Unexpected error in create-pix-withdrawal:', error);
     return new Response(
-      JSON.stringify({ error: message }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: 'INTERNAL_ERROR', 
+        message: 'Erro inesperado. Tente novamente ou entre em contato com o suporte.' 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
