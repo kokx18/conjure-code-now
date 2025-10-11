@@ -168,7 +168,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_balance: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: undefined
+      }
+      atomic_withdraw: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: {
+          new_balance: number
+        }[]
+      }
+      restore_balance: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       scratch_status: "purchased" | "revealed" | "claimed"
