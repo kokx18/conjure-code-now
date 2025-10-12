@@ -1,7 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Check, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Pricing = () => {
+  const navigate = useNavigate();
+
+  const handleJogarAgora = () => {
+    navigate('/auth');
+  };
+
   const plans = [
     {
       value: "R$ 2",
@@ -118,6 +125,7 @@ const Pricing = () => {
                   variant={plan.popular ? "hero" : "default"}
                   className="w-full"
                   size="lg"
+                  onClick={handleJogarAgora}
                 >
                   Jogar Agora
                 </Button>
