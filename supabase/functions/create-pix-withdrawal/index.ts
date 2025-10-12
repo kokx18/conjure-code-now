@@ -23,11 +23,43 @@ const PIX_PATTERNS = {
   RANDOM: /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 };
 
+// Sanitize PIX key to prevent injection attacks
+function sanitizePixKey(pixKey: string): string {
+  // Remove control characters (0x00-0x1F, 0x7F) and zero-width characters
+  let sanitized = pixKey.replace(/[\x00-\x1F\x7F\u200B-\u200D\uFEFF]/g, '');
+  
+  // Normalize Unicode characters to prevent homograph attacks
+  sanitized = sanitized.normalize('NFKC');
+  
+  // Trim whitespace
+  sanitized = sanitized.trim();
+  
+  return sanitized;
+}
+
 function isValidPixKey(pixKey: string): boolean {
   if (!pixKey || typeof pixKey !== 'string') return false;
   
-  const cleanKey = pixKey.trim();
+  // Sanitize before validation
+  const cleanKey = sanitizePixKey(pixKey);
+  
+  // Check length after sanitization
   if (cleanKey.length === 0 || cleanKey.length > 100) return false;
+  
+  // Check for SQL/NoSQL injection patterns
+  const injectionPatterns = [
+    /[';"\-\-]/,  // SQL injection attempts
+    /\b(union|select|insert|update|delete|drop|exec|script)\b/i,  // SQL keywords
+    /[\{\}\[\]]/,  // NoSQL injection attempts
+  ];
+  
+  if (injectionPatterns.some(pattern => pattern.test(cleanKey))) {
+    console.warn('[Security] Potential injection attempt in PIX key:', { 
+      original_length: pixKey.length,
+      sanitized_length: cleanKey.length 
+    });
+    return false;
+  }
   
   return Object.values(PIX_PATTERNS).some(pattern => pattern.test(cleanKey));
 }
@@ -100,7 +132,7 @@ serve(async (req) => {
       );
     }
 
-    // PIX key validation
+    // PIX key validation with sanitization
     if (!pix_key || typeof pix_key !== 'string') {
       return new Response(
         JSON.stringify({ error: 'PIX_KEY_REQUIRED', message: 'Chave PIX é obrigatória' }),
@@ -109,6 +141,7 @@ serve(async (req) => {
     }
 
     if (!isValidPixKey(pix_key)) {
+      console.warn('[Validation] Invalid PIX key format:', { user_id: user.id });
       return new Response(
         JSON.stringify({ 
           error: 'INVALID_PIX_KEY', 
@@ -117,6 +150,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Sanitize PIX key before external API call
+    const sanitizedPixKey = sanitizePixKey(pix_key);
 
     // Check for duplicate withdrawal using idempotency key
     if (idempotency_key) {
@@ -190,7 +226,7 @@ serve(async (req) => {
           description: `Saque PIX RÁPIDO - ${user.email}`,
           destination_account: {
             type: 'pix',
-            value: pix_key,
+            value: sanitizedPixKey,  // Use sanitized PIX key for external API
           },
         }),
       });
@@ -226,7 +262,7 @@ serve(async (req) => {
       throw error;
     }
 
-    // Save transaction to database
+    // Save transaction to database with sanitized PIX key
     const { data: transaction, error: txError } = await supabase
       .from('transactions')
       .insert({
@@ -235,7 +271,7 @@ serve(async (req) => {
         amount: amount,
         status: 'pending',
         mercadopago_payout_id: payoutData.id,
-        pix_key: pix_key,
+        pix_key: sanitizedPixKey,  // Store sanitized PIX key
         description: `Saque via PIX`,
         metadata: { 
           ...payoutData,
