@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Wallet, LogOut, CreditCard, Trophy } from "lucide-react";
 import { Session } from "@supabase/supabase-js";
+import RechargeModal from "@/components/RechargeModal";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [profile, setProfile] = useState<any>(null);
+  const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
 
   useEffect(() => {
     // Check for existing session
@@ -72,8 +74,13 @@ const Dashboard = () => {
   };
 
   const handleRecharge = () => {
-    toast.info('Funcionalidade de recarga em desenvolvimento');
-    // TODO: Implementar modal de recarga PIX
+    setRechargeModalOpen(true);
+  };
+
+  const handleRechargeSuccess = () => {
+    if (session?.user?.id) {
+      fetchProfile(session.user.id);
+    }
   };
 
   const handlePlayNow = (amount: number) => {
@@ -215,6 +222,12 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      <RechargeModal 
+        open={rechargeModalOpen} 
+        onOpenChange={setRechargeModalOpen}
+        onSuccess={handleRechargeSuccess}
+      />
     </div>
   );
 };
