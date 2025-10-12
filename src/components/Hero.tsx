@@ -1,8 +1,20 @@
 import { Button } from "@/components/ui/button";
-import { Sparkles, Zap, TrendingUp } from "lucide-react";
+import { Sparkles, Zap } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
+import { useNavigate } from "react-router-dom";
 
 const Hero = () => {
+  const navigate = useNavigate();
+
+  const handleStart = () => {
+    navigate('/auth');
+  };
+
+  const handleHowItWorks = () => {
+    const element = document.getElementById('how-it-works');
+    element?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background with overlay */}
@@ -40,11 +52,16 @@ const Hero = () => {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            <Button variant="hero" size="lg" className="text-lg">
+            <Button variant="hero" size="lg" className="text-lg" onClick={handleStart}>
               <Zap className="w-5 h-5" />
               Começar Agora
             </Button>
-            <Button variant="outline" size="lg" className="text-lg border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="text-lg border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary"
+              onClick={handleHowItWorks}
+            >
               Como Funciona
             </Button>
           </div>
