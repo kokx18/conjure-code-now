@@ -118,7 +118,7 @@ const RechargeModal = ({ open, onOpenChange, onSuccess }: RechargeModalProps) =>
               {qrCodeBase64 && (
                 <div className="bg-white p-4 rounded-lg">
                   <img 
-                    src={qrCodeBase64} 
+                    src={`data:image/png;base64,${qrCodeBase64}`}
                     alt="QR Code PIX" 
                     className="w-64 h-64"
                   />
