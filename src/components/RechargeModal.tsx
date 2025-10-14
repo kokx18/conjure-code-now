@@ -18,7 +18,7 @@ const RechargeModal = ({ open, onOpenChange, onSuccess }: RechargeModalProps) =>
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
 
-  const amounts = [10, 20, 50, 100, 200, 500];
+  const amounts = [0.10, 10, 20, 50, 100, 200, 500];
 
   const handleAmountSelect = async (amount: number) => {
     setSelectedAmount(amount);
