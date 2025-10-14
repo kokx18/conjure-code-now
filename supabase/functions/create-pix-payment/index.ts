@@ -98,6 +98,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
+        'X-Idempotency-Key': `${user.id}:${crypto.randomUUID()}:${safeAmount}`,
       },
       body: JSON.stringify({
         transaction_amount: safeAmount,
