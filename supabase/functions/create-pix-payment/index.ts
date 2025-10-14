@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Constants for validation
-const MIN_DEPOSIT_AMOUNT = 1.00;
+const MIN_DEPOSIT_AMOUNT = 0.10;
 const MAX_DEPOSIT_AMOUNT = 50000.00;
 
 // Rate limiting cache (in-memory, reset on function restart)
@@ -54,15 +54,16 @@ serve(async (req) => {
 
     const { amount } = await req.json();
 
-    // Comprehensive amount validation
-    if (!amount || typeof amount !== 'number') {
+    // Normalize and validate amount to 2 decimals
+    const safeAmount = Math.round(Number(amount) * 100) / 100;
+    if (!Number.isFinite(safeAmount)) {
       return new Response(
         JSON.stringify({ error: 'INVALID_AMOUNT', message: 'Valor inválido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (amount < MIN_DEPOSIT_AMOUNT) {
+    if (safeAmount < MIN_DEPOSIT_AMOUNT) {
       return new Response(
         JSON.stringify({ 
           error: 'AMOUNT_TOO_LOW', 
@@ -72,7 +73,7 @@ serve(async (req) => {
       );
     }
 
-    if (amount > MAX_DEPOSIT_AMOUNT) {
+    if (safeAmount > MAX_DEPOSIT_AMOUNT) {
       return new Response(
         JSON.stringify({ 
           error: 'AMOUNT_TOO_HIGH', 
@@ -99,7 +100,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        transaction_amount: amount,
+        transaction_amount: safeAmount,
         description: `Depósito PIX RÁPIDO - ${user.email}`,
         payment_method_id: 'pix',
         payer: {
@@ -130,7 +131,7 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         type: 'deposit',
-        amount: amount,
+        amount: safeAmount,
         status: 'pending',
         mercadopago_payment_id: paymentData.id,
         qr_code: paymentData.point_of_interaction?.transaction_data?.qr_code,
