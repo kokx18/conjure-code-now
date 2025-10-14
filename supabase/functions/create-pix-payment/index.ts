@@ -92,6 +92,11 @@ serve(async (req) => {
       );
     }
 
+    // Build webhook URL for Mercado Pago notifications
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const functionsBase = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
+    const webhookUrl = `${functionsBase}/mercadopago-webhook`;
+
     // Create PIX payment on Mercado Pago
     const paymentResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
@@ -107,6 +112,7 @@ serve(async (req) => {
         payer: {
           email: user.email,
         },
+        notification_url: webhookUrl,
       }),
     });
 

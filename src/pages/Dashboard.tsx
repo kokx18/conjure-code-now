@@ -43,6 +43,39 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Realtime: listen to profile balance updates to confirm payments
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const channel = supabase
+      .channel(`realtime-profile-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const newData: any = payload.new as any;
+          const newBalance = Number(newData?.balance ?? 0);
+          // Show confirmation only when balance increases
+          if (newBalance > balance) {
+            toast.success('Pagamento confirmado! Seu saldo foi atualizado.');
+          }
+          setProfile((prev: any) => ({ ...prev, ...newData }));
+          setBalance(newBalance);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id, balance]);
+
+
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
