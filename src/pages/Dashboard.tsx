@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Wallet, LogOut, CreditCard, Trophy } from "lucide-react";
 import { Session } from "@supabase/supabase-js";
 import RechargeModal from "@/components/RechargeModal";
+import ScratchCard from "@/components/ScratchCard";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ const Dashboard = () => {
   const [balance, setBalance] = useState(0);
   const [profile, setProfile] = useState<any>(null);
   const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
+  const [scratchCardOpen, setScratchCardOpen] = useState(false);
+  const [currentCard, setCurrentCard] = useState<any>(null);
 
   useEffect(() => {
     // Check for existing session
@@ -116,9 +119,36 @@ const Dashboard = () => {
     }
   };
 
-  const handlePlayNow = (amount: number) => {
-    toast.info(`Você selecionou jogar com R$ ${amount.toFixed(2)}`);
-    // TODO: Implementar lógica do jogo
+  const handlePlayNow = async (amount: number) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('create-scratch-card', {
+        body: { purchase_amount: amount },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      setCurrentCard(response.data.card);
+      setScratchCardOpen(true);
+      
+      // Update local balance
+      if (session?.user?.id) {
+        fetchProfile(session.user.id);
+      }
+    } catch (error: any) {
+      console.error('Error creating scratch card:', error);
+      toast.error(error.message || 'Erro ao criar raspadinha');
+    }
+  };
+
+  const handleScratchComplete = () => {
+    if (session?.user?.id) {
+      fetchProfile(session.user.id);
+    }
   };
 
   if (loading) {
@@ -261,6 +291,13 @@ const Dashboard = () => {
         open={rechargeModalOpen} 
         onOpenChange={setRechargeModalOpen}
         onSuccess={handleRechargeSuccess}
+      />
+
+      <ScratchCard
+        open={scratchCardOpen}
+        onOpenChange={setScratchCardOpen}
+        cardData={currentCard}
+        onComplete={handleScratchComplete}
       />
     </div>
   );
