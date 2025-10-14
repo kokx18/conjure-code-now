@@ -130,6 +130,7 @@ const Dashboard = () => {
   }
 
   const gamePlans = [
+    { value: 0.01, prize: "até R$ 1", chance: "1 em 10" },
     { value: 2, prize: "até R$ 100", chance: "1 em 5" },
     { value: 5, prize: "até R$ 500", chance: "1 em 4" },
     { value: 10, prize: "até R$ 2.000", chance: "1 em 3" },
@@ -187,7 +188,7 @@ const Dashboard = () => {
                       R$ {plan.value}
                     </div>
                   </div>
-                  <CardTitle className="text-xl">Raspadinha {plan.value === 2 ? 'Básica' : plan.value === 5 ? 'Premium' : 'VIP'}</CardTitle>
+                  <CardTitle className="text-xl">Raspadinha {plan.value === 0.01 ? 'Teste' : plan.value === 2 ? 'Básica' : plan.value === 5 ? 'Premium' : 'VIP'}</CardTitle>
                   <CardDescription>
                     <div className="space-y-2 mt-4">
                       <div className="flex items-center justify-center gap-2">
