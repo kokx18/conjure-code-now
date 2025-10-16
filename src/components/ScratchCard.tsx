@@ -19,6 +19,8 @@ interface ScratchCardProps {
 const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardProps) => {
   const [revealed, setRevealed] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  const [prizeAmount, setPrizeAmount] = useState(0);
+  const [won, setWon] = useState(false);
 
   const handleReveal = async () => {
     if (!cardData || revealing) return;
@@ -33,11 +35,13 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
 
       if (response.error) throw response.error;
 
-      const { won, prize_amount } = response.data;
+      const result = response.data;
+      setPrizeAmount(result.prize_amount);
+      setWon(result.won);
 
       setTimeout(() => {
-        if (won) {
-          toast.success(`🎉 Parabéns! Você ganhou R$ ${prize_amount.toFixed(2)}!`);
+        if (result.won) {
+          toast.success(`🎉 Parabéns! Você ganhou R$ ${result.prize_amount.toFixed(2)}!`);
         } else {
           toast.info('Que pena! Tente novamente.');
         }
@@ -47,6 +51,8 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
           onOpenChange(false);
           setRevealed(false);
           setRevealing(false);
+          setPrizeAmount(0);
+          setWon(false);
         }, 2000);
       }, 1000);
 
@@ -101,14 +107,14 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
               </div>
             ) : (
               <div className="space-y-2">
-                {cardData.prize_amount > 0 ? (
+                {won && prizeAmount > 0 ? (
                   <>
                     <Trophy className="w-12 h-12 text-primary mx-auto animate-bounce" />
                     <p className="text-xl font-bold text-primary">
                       Você Ganhou!
                     </p>
                     <p className="text-3xl font-bold gradient-primary bg-clip-text text-transparent">
-                      R$ {cardData.prize_amount.toFixed(2)}
+                      R$ {prizeAmount.toFixed(2)}
                     </p>
                   </>
                 ) : (
