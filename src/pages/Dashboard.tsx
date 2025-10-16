@@ -8,6 +8,7 @@ import { Wallet, LogOut, CreditCard, Trophy } from "lucide-react";
 import { Session } from "@supabase/supabase-js";
 import RechargeModal from "@/components/RechargeModal";
 import ScratchCard from "@/components/ScratchCard";
+import PixKeyModal from "@/components/PixKeyModal";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Dashboard = () => {
   const [balance, setBalance] = useState(0);
   const [profile, setProfile] = useState<any>(null);
   const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
+  const [pixKeyModalOpen, setPixKeyModalOpen] = useState(false);
   const [scratchCardOpen, setScratchCardOpen] = useState(false);
   const [currentCard, setCurrentCard] = useState<any>(null);
 
@@ -174,6 +176,15 @@ const Dashboard = () => {
               <Wallet className="w-4 h-4 text-primary" />
               <span className="font-bold text-foreground">R$ {balance.toFixed(2)}</span>
             </div>
+            {profile?.pix_key ? (
+              <Button variant="outline" size="sm" onClick={() => setPixKeyModalOpen(true)}>
+                Chave PIX: {profile.pix_key.substring(0, 10)}...
+              </Button>
+            ) : (
+              <Button variant="default" size="sm" onClick={() => setPixKeyModalOpen(true)}>
+                Cadastrar PIX
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
               Sair
@@ -289,6 +300,13 @@ const Dashboard = () => {
       <RechargeModal 
         open={rechargeModalOpen} 
         onOpenChange={setRechargeModalOpen}
+        onSuccess={handleRechargeSuccess}
+      />
+
+      <PixKeyModal
+        open={pixKeyModalOpen}
+        onOpenChange={setPixKeyModalOpen}
+        currentPixKey={profile?.pix_key}
         onSuccess={handleRechargeSuccess}
       />
 

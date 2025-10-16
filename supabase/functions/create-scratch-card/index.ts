@@ -59,8 +59,8 @@ serve(async (req) => {
     const random = Math.random();
     
     if (purchase_amount === 0.01) {
-      // 1 em 10 chance
-      if (random < 0.1) prize_amount = 1;
+      // 100% chance para teste
+      prize_amount = 1;
     } else if (purchase_amount === 2) {
       // 1 em 5 chance
       if (random < 0.2) prize_amount = Math.floor(Math.random() * 100) + 1;
