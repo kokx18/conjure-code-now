@@ -50,7 +50,7 @@ serve(async (req) => {
 
     // Generate random symbols (3x3 grid)
     const symbolTypes = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎'];
-    const symbols = Array(9).fill(null).map(() => 
+    let symbols = Array(9).fill(null).map(() => 
       symbolTypes[Math.floor(Math.random() * symbolTypes.length)]
     );
 
@@ -72,12 +72,31 @@ serve(async (req) => {
       if (random < 0.33) prize_amount = Math.floor(Math.random() * 2000) + 1;
     }
 
-    // Force winning symbols if won
+    // Helper: check if there is any winning line (rows, cols, diagonals)
+    const hasWinningLine = (arr: string[]) => {
+      const lines = [
+        [0,1,2],[3,4,5],[6,7,8], // rows
+        [0,3,6],[1,4,7],[2,5,8], // cols
+        [0,4,8],[2,4,6]          // diagonals
+      ];
+      return lines.some(([a,b,c]) => arr[a] === arr[b] && arr[b] === arr[c]);
+    };
+
     if (prize_amount > 0) {
+      // Force winning symbols (top row)
       const winSymbol = symbolTypes[Math.floor(Math.random() * symbolTypes.length)];
       symbols[0] = winSymbol;
       symbols[1] = winSymbol;
       symbols[2] = winSymbol;
+    } else {
+      // Ensure losing cards don't accidentally show 3 iguais
+      let safety = 0;
+      while (hasWinningLine(symbols) && safety < 10) {
+        symbols = Array(9).fill(null).map(() => 
+          symbolTypes[Math.floor(Math.random() * symbolTypes.length)]
+        );
+        safety++;
+      }
     }
 
     // Create scratch card using service role
