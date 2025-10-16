@@ -164,15 +164,15 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10">
       {/* Header */}
-      <header className="bg-card border-b">
+      <header className="bg-card border-b sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">
+          <h1 className="text-2xl font-bold text-primary">
             PIX RÁPIDO
           </h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-full">
               <Wallet className="w-4 h-4 text-primary" />
-              <span className="font-bold">R$ {balance.toFixed(2)}</span>
+              <span className="font-bold text-foreground">R$ {balance.toFixed(2)}</span>
             </div>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
@@ -208,12 +208,14 @@ const Dashboard = () => {
             {gamePlans.map((plan) => (
               <Card key={plan.value} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="text-center">
-                  <div className="mb-4">
-                    <div className="text-4xl font-bold gradient-primary bg-clip-text text-transparent">
+                  <div className="mb-4 bg-primary/10 rounded-lg p-4">
+                    <div className="text-3xl font-bold text-primary">
                       R$ {plan.value.toFixed(2)}
                     </div>
                   </div>
-                  <CardTitle className="text-xl">Raspadinha {plan.value === 0.01 ? 'Teste' : plan.value === 2 ? 'Básica' : plan.value === 5 ? 'Premium' : 'VIP'}</CardTitle>
+                  <CardTitle className="text-xl">
+                    Raspadinha {plan.value === 0.01 ? 'Teste' : plan.value === 2 ? 'Básica' : plan.value === 5 ? 'Premium' : 'VIP'}
+                  </CardTitle>
                   <CardDescription>
                     <div className="space-y-2 mt-4">
                       <div className="flex items-center justify-center gap-2">
@@ -230,7 +232,7 @@ const Dashboard = () => {
                   <Button 
                     onClick={() => handlePlayNow(plan.value)} 
                     className="w-full"
-                    variant={plan.value === 10 ? "hero" : "default"}
+                    variant={plan.value === 10 ? "default" : "default"}
                     disabled={balance < plan.value}
                   >
                     {balance < plan.value ? 'Saldo Insuficiente' : 'Jogar Agora'}
@@ -246,7 +248,7 @@ const Dashboard = () => {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-primary">
-                    R$ {profile?.total_won?.toFixed(2) || '0.00'}
+                    R$ {(profile?.total_won ?? 0).toFixed(2)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Total Ganho
@@ -258,7 +260,7 @@ const Dashboard = () => {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-secondary">
-                    R$ {profile?.total_played?.toFixed(2) || '0.00'}
+                    R$ {(profile?.total_played ?? 0).toFixed(2)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Total Jogado
@@ -270,7 +272,9 @@ const Dashboard = () => {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-accent">
-                    {profile ? Math.round((profile.total_won / (profile.total_played || 1)) * 100) : 0}%
+                    {profile && profile.total_played > 0 
+                      ? Math.round((profile.total_won / profile.total_played) * 100) 
+                      : 0}%
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Taxa de Retorno
