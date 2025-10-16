@@ -5,7 +5,7 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: '/conjure-code-now/',
+  // base removed to avoid blank page in preview environments
   server: {
     host: "::",
     port: 8080,
