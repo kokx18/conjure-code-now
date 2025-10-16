@@ -77,80 +77,91 @@ serve(async (req) => {
         .eq('id', user.id)
         .single();
 
-      // Auto-withdraw ALL prizes via PIX if user has pix_key configured
-      if (profile?.pix_key) {
-        try {
-          const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-          if (accessToken) {
-            const payoutResponse = await fetch('https://api.mercadopago.com/v1/money_transfers', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-                'X-Idempotency-Key': crypto.randomUUID(),
-              },
-              body: JSON.stringify({
-                amount: card.prize_amount,
-                description: `Prêmio Raspadinha - ${user.email}`,
-                destination_account: {
-                  type: 'pix',
-                  value: profile.pix_key,
-                },
-              }),
-            });
-
-            if (payoutResponse.ok) {
-              const payoutData = await payoutResponse.json();
-              
-              // Save transaction
-              await supabaseAdmin
-                .from('transactions')
-                .insert({
-                  user_id: user.id,
-                  type: 'prize_payout',
-                  amount: card.prize_amount,
-                  status: 'pending',
-                  mercadopago_payout_id: payoutData.id,
-                  pix_key: profile.pix_key,
-                  description: `Pagamento automático - Prêmio R$ ${card.prize_amount.toFixed(2)}`,
-                  metadata: payoutData,
-                });
-
-              console.log(`Auto PIX payment created for user ${user.id}: R$ ${card.prize_amount}`);
-            } else {
-              // If PIX fails, add to balance instead
-              console.error('PIX payout failed, adding to balance instead');
-              await supabaseAdmin.rpc('add_balance', {
-                p_user_id: user.id,
-                p_amount: card.prize_amount
-              });
-            }
-          } else {
-            // No Mercado Pago token, add to balance
-            console.log('No Mercado Pago token, adding to balance');
-            await supabaseAdmin.rpc('add_balance', {
-              p_user_id: user.id,
-              p_amount: card.prize_amount
-            });
-          }
-        } catch (error) {
-          console.error('Error processing auto PIX:', error);
-          // On error, add to balance as fallback
-          await supabaseAdmin.rpc('add_balance', {
-            p_user_id: user.id,
-            p_amount: card.prize_amount
-          });
-        }
-      } else {
-        // No PIX key configured: add to balance
-        console.log('No PIX key configured, adding to balance');
-        await supabaseAdmin.rpc('add_balance', {
-          p_user_id: user.id,
-          p_amount: card.prize_amount
-        });
+      // CRITICAL: Only auto-withdraw via PIX, NEVER add to balance
+      if (!profile?.pix_key) {
+        // No PIX key configured - return error asking user to configure it
+        return new Response(
+          JSON.stringify({ 
+            error: 'PIX_KEY_REQUIRED',
+            message: 'Configure sua chave PIX para receber o prêmio automaticamente',
+            card,
+            won: true,
+            prize_amount: card.prize_amount
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+          },
+        );
       }
 
-      // Update profile stats (best-effort)
+      try {
+        const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+        if (!accessToken) {
+          throw new Error('Mercado Pago não configurado');
+        }
+
+        // Create automatic PIX withdrawal
+        const payoutResponse = await fetch('https://api.mercadopago.com/v1/money_transfers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'X-Idempotency-Key': crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            amount: card.prize_amount,
+            description: `Prêmio Raspadinha - ${user.email}`,
+            destination_account: {
+              type: 'pix',
+              value: profile.pix_key,
+            },
+          }),
+        });
+
+        if (!payoutResponse.ok) {
+          const errorData = await payoutResponse.json();
+          console.error('PIX payout failed:', errorData);
+          throw new Error('Falha no pagamento PIX');
+        }
+
+        const payoutData = await payoutResponse.json();
+        
+        // Save transaction
+        await supabaseAdmin
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            type: 'prize_payout',
+            amount: card.prize_amount,
+            status: 'pending',
+            mercadopago_payout_id: payoutData.id,
+            pix_key: profile.pix_key,
+            description: `Pagamento automático - Prêmio R$ ${card.prize_amount.toFixed(2)}`,
+            metadata: payoutData,
+          });
+
+        console.log(`Auto PIX payment created for user ${user.id}: R$ ${card.prize_amount}`);
+
+      } catch (error) {
+        console.error('Error processing auto PIX:', error);
+        // Return error but mark card as revealed
+        return new Response(
+          JSON.stringify({ 
+            error: 'PAYOUT_FAILED',
+            message: 'Erro ao processar pagamento. Entre em contato com o suporte.',
+            card,
+            won: true,
+            prize_amount: card.prize_amount
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+          },
+        );
+      }
+
+      // Update profile stats
       if (profile) {
         const newTotalWon = Number(profile.total_won || 0) + Number(card.prize_amount);
         await supabaseAdmin

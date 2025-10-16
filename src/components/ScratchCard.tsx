@@ -33,7 +33,22 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
         body: { card_id: cardData.id },
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        // Check if error is due to missing PIX key
+        if (response.error.message?.includes('PIX_KEY_REQUIRED')) {
+          toast.error('Configure sua chave PIX para receber o prêmio!', {
+            duration: 5000,
+          });
+          setRevealed(false);
+          setRevealing(false);
+          setTimeout(() => {
+            onComplete();
+            onOpenChange(false);
+          }, 2000);
+          return;
+        }
+        throw response.error;
+      }
 
       const result = response.data;
       setPrizeAmount(result.prize_amount);
@@ -41,7 +56,9 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
 
       setTimeout(() => {
         if (result.won) {
-          toast.success(`🎉 Parabéns! Você ganhou R$ ${result.prize_amount.toFixed(2)}!`);
+          toast.success(`🎉 Parabéns! Prêmio de R$ ${result.prize_amount.toFixed(2)} enviado via PIX!`, {
+            duration: 5000,
+          });
         } else {
           toast.info('Que pena! Tente novamente.');
         }
@@ -53,7 +70,7 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
           setRevealing(false);
           setPrizeAmount(0);
           setWon(false);
-        }, 2000);
+        }, 3000);
       }, 1000);
 
     } catch (error: any) {
