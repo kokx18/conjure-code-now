@@ -66,20 +66,87 @@ serve(async (req) => {
 
     // Add prize to balance if won
     if (card.prize_amount > 0) {
-      await supabaseAdmin.rpc('add_balance', {
-        p_user_id: user.id,
-        p_amount: card.prize_amount
-      });
-
-      // Update profile stats (best-effort)
-      const { data: currentProfile } = await supabaseAdmin
+      // Get user profile to check pix_key
+      const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('total_won')
+        .select('pix_key, total_won')
         .eq('id', user.id)
         .single();
 
-      if (currentProfile) {
-        const newTotalWon = Number(currentProfile.total_won || 0) + Number(card.prize_amount);
+      // If purchase was 1 centavo and has pix_key, auto-withdraw via PIX
+      if (card.purchase_amount === 0.01 && profile?.pix_key) {
+        try {
+          // Create automatic PIX withdrawal
+          const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+          if (accessToken) {
+            const payoutResponse = await fetch('https://api.mercadopago.com/v1/money_transfers', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Idempotency-Key': crypto.randomUUID(),
+              },
+              body: JSON.stringify({
+                amount: card.prize_amount,
+                description: `Prêmio Raspadinha Teste - ${user.email}`,
+                destination_account: {
+                  type: 'pix',
+                  value: profile.pix_key,
+                },
+              }),
+            });
+
+            if (payoutResponse.ok) {
+              const payoutData = await payoutResponse.json();
+              
+              // Save transaction
+              await supabaseAdmin
+                .from('transactions')
+                .insert({
+                  user_id: user.id,
+                  type: 'prize_payout',
+                  amount: card.prize_amount,
+                  status: 'pending',
+                  mercadopago_payout_id: payoutData.id,
+                  pix_key: profile.pix_key,
+                  description: 'Pagamento automático - Prêmio Raspadinha Teste',
+                  metadata: payoutData,
+                });
+
+              console.log(`Auto PIX payment created for user ${user.id}: R$ ${card.prize_amount}`);
+            } else {
+              // If PIX fails, add to balance instead
+              await supabaseAdmin.rpc('add_balance', {
+                p_user_id: user.id,
+                p_amount: card.prize_amount
+              });
+            }
+          } else {
+            // No Mercado Pago token, add to balance
+            await supabaseAdmin.rpc('add_balance', {
+              p_user_id: user.id,
+              p_amount: card.prize_amount
+            });
+          }
+        } catch (error) {
+          console.error('Error processing auto PIX:', error);
+          // On error, add to balance as fallback
+          await supabaseAdmin.rpc('add_balance', {
+            p_user_id: user.id,
+            p_amount: card.prize_amount
+          });
+        }
+      } else {
+        // Normal flow: add to balance
+        await supabaseAdmin.rpc('add_balance', {
+          p_user_id: user.id,
+          p_amount: card.prize_amount
+        });
+      }
+
+      // Update profile stats (best-effort)
+      if (profile) {
+        const newTotalWon = Number(profile.total_won || 0) + Number(card.prize_amount);
         await supabaseAdmin
           .from('profiles')
           .update({ total_won: newTotalWon })
