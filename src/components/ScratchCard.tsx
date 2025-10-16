@@ -27,13 +27,8 @@ const ScratchCard = ({ open, onOpenChange, cardData, onComplete }: ScratchCardPr
     setRevealed(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await supabase.functions.invoke('reveal-scratch-card', {
         body: { card_id: cardData.id },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
       });
 
       if (response.error) throw response.error;

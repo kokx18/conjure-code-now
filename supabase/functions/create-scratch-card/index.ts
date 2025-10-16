@@ -99,13 +99,20 @@ serve(async (req) => {
       throw cardError;
     }
 
-    // Update profile stats
-    await supabaseAdmin
+    // Update profile stats (best-effort)
+    const { data: currentProfile } = await supabaseAdmin
       .from('profiles')
-      .update({
-        total_played: supabaseAdmin.rpc('increment', { x: purchase_amount })
-      })
-      .eq('id', user.id);
+      .select('total_played')
+      .eq('id', user.id)
+      .single();
+
+    if (currentProfile) {
+      const newTotalPlayed = Number(currentProfile.total_played || 0) + Number(purchase_amount);
+      await supabaseAdmin
+        .from('profiles')
+        .update({ total_played: newTotalPlayed })
+        .eq('id', user.id);
+    }
 
     return new Response(
       JSON.stringify({ card }),

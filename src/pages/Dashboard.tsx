@@ -121,13 +121,8 @@ const Dashboard = () => {
 
   const handlePlayNow = async (amount: number) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await supabase.functions.invoke('create-scratch-card', {
         body: { purchase_amount: amount },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
       });
 
       if (response.error) throw response.error;

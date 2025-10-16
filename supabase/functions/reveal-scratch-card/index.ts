@@ -71,13 +71,20 @@ serve(async (req) => {
         p_amount: card.prize_amount
       });
 
-      // Update profile stats
-      await supabaseAdmin
+      // Update profile stats (best-effort)
+      const { data: currentProfile } = await supabaseAdmin
         .from('profiles')
-        .update({
-          total_won: supabaseAdmin.rpc('increment', { x: card.prize_amount })
-        })
-        .eq('id', user.id);
+        .select('total_won')
+        .eq('id', user.id)
+        .single();
+
+      if (currentProfile) {
+        const newTotalWon = Number(currentProfile.total_won || 0) + Number(card.prize_amount);
+        await supabaseAdmin
+          .from('profiles')
+          .update({ total_won: newTotalWon })
+          .eq('id', user.id);
+      }
     }
 
     return new Response(
