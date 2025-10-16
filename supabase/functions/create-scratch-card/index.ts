@@ -12,17 +12,23 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Creating scratch card...');
+    const authHeader = req.headers.get('Authorization');
+    console.log('Auth header:', authHeader ? 'Present' : 'Missing');
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader! },
         },
       }
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    console.log('User:', user?.id, 'Error:', userError);
+    
     if (!user) {
       throw new Error('Unauthorized');
     }
@@ -122,7 +128,7 @@ serve(async (req) => {
       },
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
