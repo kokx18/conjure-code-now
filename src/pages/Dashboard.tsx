@@ -204,13 +204,13 @@ const Dashboard = () => {
           </Card>
 
           {/* Game Plans */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {gamePlans.map((plan) => (
               <Card key={plan.value} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="text-center">
                   <div className="mb-4">
                     <div className="text-4xl font-bold gradient-primary bg-clip-text text-transparent">
-                      R$ {plan.value}
+                      R$ {plan.value.toFixed(2)}
                     </div>
                   </div>
                   <CardTitle className="text-xl">Raspadinha {plan.value === 0.01 ? 'Teste' : plan.value === 2 ? 'Básica' : plan.value === 5 ? 'Premium' : 'VIP'}</CardTitle>

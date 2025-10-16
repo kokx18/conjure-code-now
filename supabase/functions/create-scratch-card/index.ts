@@ -16,20 +16,22 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     console.log('Auth header:', authHeader ? 'Present' : 'Missing');
     
+    if (!authHeader) {
+      throw new Error('No authorization header');
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader! },
-        },
-      }
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    // Extract token from "Bearer <token>"
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    
     console.log('User:', user?.id, 'Error:', userError);
     
-    if (!user) {
+    if (!user || userError) {
       throw new Error('Unauthorized');
     }
 
