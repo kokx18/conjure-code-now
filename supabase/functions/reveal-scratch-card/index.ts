@@ -73,10 +73,9 @@ serve(async (req) => {
         .eq('id', user.id)
         .single();
 
-      // If purchase was 1 centavo and has pix_key, auto-withdraw via PIX
-      if (card.purchase_amount === 0.01 && profile?.pix_key) {
+      // Auto-withdraw ALL prizes via PIX if user has pix_key configured
+      if (profile?.pix_key) {
         try {
-          // Create automatic PIX withdrawal
           const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
           if (accessToken) {
             const payoutResponse = await fetch('https://api.mercadopago.com/v1/money_transfers', {
@@ -88,7 +87,7 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 amount: card.prize_amount,
-                description: `Prêmio Raspadinha Teste - ${user.email}`,
+                description: `Prêmio Raspadinha - ${user.email}`,
                 destination_account: {
                   type: 'pix',
                   value: profile.pix_key,
@@ -109,13 +108,14 @@ serve(async (req) => {
                   status: 'pending',
                   mercadopago_payout_id: payoutData.id,
                   pix_key: profile.pix_key,
-                  description: 'Pagamento automático - Prêmio Raspadinha Teste',
+                  description: `Pagamento automático - Prêmio R$ ${card.prize_amount.toFixed(2)}`,
                   metadata: payoutData,
                 });
 
               console.log(`Auto PIX payment created for user ${user.id}: R$ ${card.prize_amount}`);
             } else {
               // If PIX fails, add to balance instead
+              console.error('PIX payout failed, adding to balance instead');
               await supabaseAdmin.rpc('add_balance', {
                 p_user_id: user.id,
                 p_amount: card.prize_amount
@@ -123,6 +123,7 @@ serve(async (req) => {
             }
           } else {
             // No Mercado Pago token, add to balance
+            console.log('No Mercado Pago token, adding to balance');
             await supabaseAdmin.rpc('add_balance', {
               p_user_id: user.id,
               p_amount: card.prize_amount
@@ -137,7 +138,8 @@ serve(async (req) => {
           });
         }
       } else {
-        // Normal flow: add to balance
+        // No PIX key configured: add to balance
+        console.log('No PIX key configured, adding to balance');
         await supabaseAdmin.rpc('add_balance', {
           p_user_id: user.id,
           p_amount: card.prize_amount
