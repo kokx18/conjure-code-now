@@ -8,3 +8,9 @@ verify_jwt = true
 
 [functions.mercadopago-webhook]
 verify_jwt = false
+
+[functions.create-scratch-card]
+verify_jwt = true
+
+[functions.reveal-scratch-card]
+verify_jwt = true
